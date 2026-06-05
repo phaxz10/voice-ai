@@ -1,0 +1,12 @@
+{
+  "name": "Local Transcribe",
+  "short_name": "Transcribe",
+  "description": "Private browser transcription for audio and video files.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0e16",
+  "theme_color": "#07090f",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
