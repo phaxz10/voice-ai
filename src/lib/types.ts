@@ -81,7 +81,7 @@ export interface CatalogModel {
   /** Stable catalog id, e.g. "small.en". */
   id: string
   label: string
-  family: 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo' | 'custom'
+  family: 'small' | 'large-v3-turbo'
   /** HuggingFace repo id loaded by Transformers.js (ONNX weights). */
   hfId: string
   /** Whether this is the English-only (.en) build. */
@@ -96,8 +96,6 @@ export interface CatalogModel {
   /** Curated per-language quality used for model recommendation. */
   languages: Record<string, LangQuality>
   available: boolean
-  /** User-supplied model loaded by HF id. */
-  custom?: boolean
 }
 
 /* Browser capability. */

@@ -4,25 +4,16 @@ import type {
   PrimaryLanguage
 } from './types'
 
-const FAMILY_ORDER: CatalogModel['family'][] = [
-  'tiny',
-  'base',
-  'small',
-  'medium',
-  'large-v3-turbo',
-  'custom',
-]
+const FAMILY_ORDER: CatalogModel['family'][] = ['small', 'large-v3-turbo']
 
 type Entry = Omit<CatalogModel, 'available'>
 
 // ONNX Whisper models loaded by Transformers.js (ADR-0007). Sizes are approximate.
+// Deliberately scoped to Small (the smallest tier that doesn't hallucinate/loop on hard audio)
+// and Large v3 Turbo — the tiny/base tiers were dropped because they loop on real meetings.
 const ENTRIES: Entry[] = [
-  { id: 'tiny.en', label: 'Tiny (English)', family: 'tiny', hfId: 'Xenova/whisper-tiny.en', englishOnly: true, multilingual: false, sizeMb: 120, ramCeilingMb: 400, requiresWebGPU: false, languages: { en: 2 } },
-  { id: 'tiny', label: 'Tiny', family: 'tiny', hfId: 'Xenova/whisper-tiny', englishOnly: false, multilingual: true, sizeMb: 120, ramCeilingMb: 400, requiresWebGPU: false, languages: { en: 1, zh: 1, ja: 1, yue: 0, tl: 1 } },
-  { id: 'base.en', label: 'Base (English)', family: 'base', hfId: 'Xenova/whisper-base.en', englishOnly: true, multilingual: false, sizeMb: 210, ramCeilingMb: 600, requiresWebGPU: false, languages: { en: 3 } },
-  { id: 'base', label: 'Base', family: 'base', hfId: 'Xenova/whisper-base', englishOnly: false, multilingual: true, sizeMb: 210, ramCeilingMb: 600, requiresWebGPU: false, languages: { en: 2, zh: 1, ja: 1, yue: 1, tl: 1 } },
-  { id: 'small.en', label: 'Small (English)', family: 'small', hfId: 'Xenova/whisper-small.en', englishOnly: true, multilingual: false, sizeMb: 480, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 3 } },
-  { id: 'small', label: 'Small', family: 'small', hfId: 'Xenova/whisper-small', englishOnly: false, multilingual: true, sizeMb: 480, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 2, zh: 2, ja: 2, yue: 1, tl: 2 } },
+  { id: 'small.en', label: 'Small (English)', family: 'small', hfId: 'Xenova/whisper-small.en', englishOnly: true, multilingual: false, sizeMb: 520, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 3 } },
+  { id: 'small', label: 'Small', family: 'small', hfId: 'Xenova/whisper-small', englishOnly: false, multilingual: true, sizeMb: 520, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 2, zh: 2, ja: 2, yue: 1, tl: 2 } },
   // We request word-level timestamps (return_timestamps: 'word'), which needs a decoder exported
   // WITH cross-attentions. The canonical `whisper-large-v3-turbo` export lacks them and throws
   // "Model outputs must contain cross attentions"; the `_timestamped` sibling is re-exported with
@@ -32,25 +23,6 @@ const ENTRIES: Entry[] = [
 
 export function buildCatalog(): CatalogModel[] {
   return ENTRIES.map((e) => ({ ...e, available: true }))
-}
-
-/** Build a custom catalog model from any HF id (Transformers.js Sideload-by-id). */
-export function customModel(hfId: string): CatalogModel {
-  const clean = hfId.trim().replace(/^https?:\/\/huggingface\.co\//, '')
-  return {
-    id: `custom:${clean}`,
-    label: clean.split('/').pop() || clean,
-    family: 'custom',
-    hfId: clean,
-    englishOnly: false,
-    multilingual: true,
-    sizeMb: 0,
-    ramCeilingMb: 1500,
-    requiresWebGPU: false,
-    languages: {},
-    available: true,
-    custom: true,
-  }
 }
 
 function familyRank(m: CatalogModel): number {
@@ -75,7 +47,6 @@ export function recommendModel(
   const usable = catalog.filter(
     (m) =>
       m.available &&
-      !m.custom &&
       m.ramCeilingMb <= maxRam &&
       (!m.requiresWebGPU || cap.webgpu) &&
       (english ? m.englishOnly || m.multilingual : m.multilingual) &&
@@ -90,5 +61,5 @@ export function recommendModel(
       : Number(b.multilingual) - Number(a.multilingual)
   })
 
-  return ranked[0] ?? catalog.find((m) => m.available && !m.custom) ?? null
+  return ranked[0] ?? catalog.find((m) => m.available) ?? null
 }

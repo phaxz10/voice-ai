@@ -8,14 +8,13 @@ import {
   ArrowLeft,
   ArrowRight,
   Zap,
-  Plus,
   X,
   RotateCcw,
   Check,
   Info,
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
-import { recommendModel, customModel } from '@/lib/catalog'
+import { recommendModel } from '@/lib/catalog'
 import { fitCheck } from '@/lib/capability'
 import { getEngine, benchmark, isCancelled, type LoadStatus } from '@/lib/engine'
 import { type CatalogModel, PRIMARY_LANGUAGES, type PrimaryLanguage } from '@/lib/types'
@@ -62,10 +61,7 @@ export function Onboarding() {
     [catalog, capability, primaryLanguage],
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [customSel, setCustomSel] = useState<CatalogModel | null>(null)
-  const [customId, setCustomId] = useState('')
-  const selected =
-    customSel ?? catalog.find((m) => m.id === selectedId) ?? activeModel ?? recommended
+  const selected = catalog.find((m) => m.id === selectedId) ?? activeModel ?? recommended
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [status, setStatus] = useState<LoadStatus | null>(null)
@@ -167,7 +163,6 @@ export function Onboarding() {
             onValueChange={(v) => {
               setPrimaryLanguage(v as PrimaryLanguage)
               setSelectedId(null)
-              setCustomSel(null)
             }}
           >
             <SelectTrigger id="lang" className="w-52">
@@ -228,43 +223,11 @@ export function Onboarding() {
             provisioned={provisioned.includes(m.id)}
             active={activeModel?.id === m.id}
             busy={busy}
-            onSelect={(mm) => {
-              setCustomSel(null)
-              setSelectedId(mm.id)
-            }}
+            onSelect={(mm) => setSelectedId(mm.id)}
             onEvict={busy ? undefined : (mm) => setEvictTarget(mm)}
           />
         ))}
       </div>
-
-      {/* Advanced: load any Hugging Face model by id. */}
-      <details className="rounded-lg border bg-card p-4">
-        <summary className="cursor-pointer text-sm font-medium">
-          Advanced: load any Hugging Face model (ONNX)
-        </summary>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Paste a Hugging Face repo id that ships ONNX weights, such as a language-specific fine-tune.
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input
-            value={customId}
-            onChange={(e) => setCustomId(e.target.value)}
-            placeholder="onnx-community/whisper-small.en"
-            className="h-9 flex-1 rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!customId.trim() || busy}
-            onClick={() => {
-              setCustomSel(customModel(customId))
-              setSelectedId(null)
-            }}
-          >
-            <Plus className="size-4" /> Use this model
-          </Button>
-        </div>
-      </details>
 
       <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col gap-3 rounded-lg border bg-card p-4 shadow-lg sm:sticky sm:bottom-4">
         {busy ? (
@@ -351,9 +314,7 @@ export function Onboarding() {
                     ? 'Currently active on this device'
                     : selectedProvisioned
                       ? 'Downloaded. Switch instantly'
-                      : selected.custom
-                        ? `${selected.hfId}. Downloads on first use`
-                        : `${formatMb(selected.sizeMb)}. Cached after first download`
+                      : `${formatMb(selected.sizeMb)}. Cached after first download`
                   : 'Pick a model to continue'}
               </div>
             </div>

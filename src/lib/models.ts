@@ -102,8 +102,8 @@ export async function evictModel(hfId: string, id?: string): Promise<void> {
 
 /**
  * Reconcile the provisioned-id index against Cache Storage truth in a single key scan.
- * `resolveHfId` maps a stored id → its hfId (built-ins via the catalog; `custom:<hfId>` ids
- * self-resolve). Returns the verified id set and rewrites the index if it drifted.
+ * `resolveHfId` maps a stored catalog id → its hfId. Returns the verified id set and rewrites
+ * the index if it drifted.
  */
 export async function reconcileProvisioned(
   resolveHfId: (id: string) => string | null,

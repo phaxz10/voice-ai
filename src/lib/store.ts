@@ -8,7 +8,7 @@ import type {
   TranscriptRecord,
 } from './types'
 import { detectCapability, estimateEta } from './capability'
-import { buildCatalog, customModel, recommendModel } from './catalog'
+import { buildCatalog, recommendModel } from './catalog'
 import {
   getMediaAsset,
   getSetting,
@@ -144,16 +144,12 @@ export const useApp = create<AppState>((set, get) => ({
 
     // Reconcile the provisioned-id hint against Cache Storage truth (ADR-0008).
     const idToHf = new Map(catalog.map((m) => [m.id, m.hfId]))
-    const resolveHf = (id: string): string | null =>
-      idToHf.get(id) ?? (id.startsWith('custom:') ? id.slice('custom:'.length) : null)
+    const resolveHf = (id: string): string | null => idToHf.get(id) ?? null
     const provisioned = await reconcileProvisioned(resolveHf).catch(() => [] as string[])
 
-    // Restore the Active Model only if its weights are still cached (rebuild custom models by id).
+    // Restore the Active Model only if its weights are still cached.
     let activeModel: CatalogModel | null = savedModelId
-      ? catalog.find((m) => m.id === savedModelId) ??
-        (savedModelId.startsWith('custom:')
-          ? customModel(savedModelId.slice('custom:'.length))
-          : null)
+      ? catalog.find((m) => m.id === savedModelId) ?? null
       : null
     if (activeModel && !provisioned.includes(activeModel.id)) activeModel = null
 

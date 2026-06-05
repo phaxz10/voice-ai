@@ -47,13 +47,22 @@ export interface ASRResult {
 }
 
 function dtypeFor(model: CatalogModel, device: EngineDevice): unknown {
+  const large = model.family === 'large-v3-turbo'
   if (device === 'webgpu') {
-    if (model.family === 'large-v3-turbo' || model.family === 'medium') {
-      return { encoder_model: 'fp16', decoder_model_merged: 'q4' }
-    }
-    return 'fp16'
+    // large-v3-turbo: fp16 encoder + 4-bit decoder. (The onnx-community fp16 *merged decoder* trips
+    // onnxruntime-web's graph validator — "outer scope value ... add an Identity node" — but q4,
+    // quantized from fp32 rather than float16-converted, loads cleanly.) Small: uniform fp16 is fine
+    // on the Xenova export.
+    return large ? { encoder_model: 'fp16', decoder_model_merged: 'q4' } : 'fp16'
   }
-  return 'q8' // wasm
+  // WASM. Whisper is "extremely sensitive to quantization, especially of the encoder" (HF docs): an
+  // int8 ENCODER is what makes small spiral into the "I'm I'm so so" repetition loop on hard audio.
+  // Keep the encoder full precision and quantize only the decoder (q8 tolerates int8 fine). large is
+  // WebGPU-only in practice; fp16 encoder here avoids dragging in its multi-GB fp32 weight.
+  if (large) {
+    return { encoder_model: 'fp16', decoder_model_merged: 'q8' }
+  }
+  return { encoder_model: 'fp32', decoder_model_merged: 'q8' }
 }
 
 interface Loaded {
@@ -356,6 +365,18 @@ function normalizePartial(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Heuristic for Whisper's repetition-hallucination: a chunk dominated by a handful of repeated
+ * tokens (e.g. "I'm, I'm, so, so, so..."). Over a reasonable span, real speech keeps introducing
+ * new words; a degenerate loop has very few unique tokens. This stands in for Whisper's
+ * compression-ratio gate, which transformers.js v4.2.0 does not implement.
+ */
+function looksDegenerate(text: string): boolean {
+  const toks = text.toLowerCase().split(/\s+/).filter(Boolean)
+  if (toks.length < 16) return false
+  return new Set(toks).size / toks.length < 0.35
+}
+
 function hasDetectableSignal(wave: Float32Array): boolean {
   let peak = 0
   for (let i = 0; i < wave.length; i += 16) {
@@ -404,6 +425,11 @@ async function transcribeOne(
     const params: Record<string, unknown> = {
       force_full_sequences: false,
       max_new_tokens: 160,
+      // Hard loop-breaker: forbid any 3-gram from repeating, which is what kills Whisper's
+      // "I'm I'm so so so" repetition-hallucination. This is the decode safety-net the installed
+      // transformers.js (v4.2.0) actually supports — the Python thresholds (compression_ratio /
+      // logprob / no_speech) are NOT implemented in this build, so passing them would be ignored.
+      no_repeat_ngram_size: 3,
       ...(streamer ? { streamer } : {}),
       ...extra,
     }
@@ -418,13 +444,24 @@ async function transcribeOne(
     : { language: opts.language, task: opts.task ?? 'transcribe' }
 
   let extra: Record<string, unknown> = { ...multilingual, return_timestamps: 'word' }
+  let escalated = false
   for (;;) {
     try {
-      return await run(extra)
+      const out = await run(extra)
+      // Manual temperature fallback: transformers.js has no built-in compression-ratio retry, so if
+      // greedy decoding still collapsed into a degenerate repetition loop, re-decode this chunk ONCE
+      // with light sampling (and a tighter n-gram block) to jolt it out — Whisper's temperature
+      // fallback, by hand. The fresh-streamer-per-attempt design means the retry re-streams cleanly.
+      if (!escalated && looksDegenerate(out.text)) {
+        escalated = true
+        extra = { ...extra, do_sample: true, temperature: 0.4, no_repeat_ngram_size: 2 }
+        continue
+      }
+      return out
     } catch (e) {
       if (opts.signal?.aborted) throw new CancelledError('Transcription stopped')
       const msg = String((e as Error)?.message ?? e)
-      // (1) Model rejects language+task -> drop them and retry (custom / English-only builds).
+      // (1) Model rejects language+task -> drop them and retry (English-only .en builds).
       if (msg.includes('English-only') && ('language' in extra || 'task' in extra)) {
         const next = { ...extra }
         delete next.language
@@ -432,10 +469,9 @@ async function transcribeOne(
         extra = next
         continue
       }
-      // (2) Model exported without cross-attentions can't do word timestamps -> degrade to
-      // chunk-level timing (buildAsrLayer re-segments either granularity) instead of failing.
-      // Catalog turbo uses the *_timestamped export so it never lands here; this protects
-      // Sideloaded custom models from a cryptic "must contain cross attentions" crash.
+      // (2) Defensive: a decoder exported without cross-attentions can't do word timestamps ->
+      // degrade to chunk-level timing (buildAsrLayer re-segments either granularity) instead of
+      // failing. The catalog turbo uses the *_timestamped export so it never lands here.
       if (/cross attentions|output_attentions/i.test(msg) && extra.return_timestamps === 'word') {
         extra = { ...extra, return_timestamps: true }
         continue

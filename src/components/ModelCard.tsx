@@ -55,11 +55,7 @@ export function ModelCard({
         : selected
           ? 'Selected'
           : ''
-  const modelScope = model.custom
-    ? 'Custom Hugging Face model'
-    : model.multilingual
-      ? 'Multilingual model'
-      : 'English-only model'
+  const modelScope = model.multilingual ? 'Multilingual model' : 'English-only model'
   const engineNote = model.requiresWebGPU ? 'Requires WebGPU' : 'Runs on WebGPU or CPU'
 
   return (
