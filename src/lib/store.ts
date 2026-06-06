@@ -4,6 +4,7 @@ import type {
   CatalogModel,
   EditLayer,
   EngineDevice,
+  ModelTask,
   PrimaryLanguage,
   TranscriptRecord,
 } from './types'
@@ -31,7 +32,27 @@ import { evictModel, markProvisioned as persistProvisioned, reconcileProvisioned
 /** Max undo steps kept per open transcript (Edit-layer time machine). */
 const HISTORY_LIMIT = 100
 
-export type View = 'landing' | 'onboarding' | 'workspace' | 'transcript' | 'history'
+export type View = 'landing' | 'onboarding' | 'workspace' | 'translate' | 'transcript' | 'history'
+
+const VIEW_HASH: Record<View, string> = {
+  landing: '#/',
+  onboarding: '#/models',
+  workspace: '#/transcribe',
+  translate: '#/translate',
+  transcript: '#/transcript',
+  history: '#/history',
+}
+
+export function viewFromHash(hash = typeof window !== 'undefined' ? window.location.hash : ''): View | null {
+  const normalized = hash || '#/'
+  return (Object.entries(VIEW_HASH).find(([, h]) => h === normalized)?.[0] as View | undefined) ?? null
+}
+
+function writeViewHash(view: View): void {
+  if (typeof window === 'undefined') return
+  const next = VIEW_HASH[view]
+  if (window.location.hash !== next) window.location.hash = next
+}
 
 export type JobKind = 'file' | 'rerun'
 export type JobPhase = 'decoding' | 'loading' | 'transcribing' | 'cancelling'
@@ -73,8 +94,14 @@ interface AppState {
   /** Catalog ids whose weights are present in Cache Storage, reconciled on init. */
   provisioned: string[]
   primaryLanguage: PrimaryLanguage
-  /** The provisioned, active model (downloaded + selected). */
+  /** The provisioned, active Transcription Model (downloaded + selected). */
   activeModel: CatalogModel | null
+  /** The provisioned, active Translation Model (downloaded + selected). */
+  activeTranslationModel: CatalogModel | null
+  /** Which Task the model-management screen is currently configuring. */
+  modelSetupTask: ModelTask
+  /** Where model setup should return after selecting/provisioning a model. */
+  modelSetupReturnView: View | null
   record: TranscriptRecord | null
   /** Transient object URL for the current session's media (never persisted). */
   mediaUrl: string | null
@@ -89,6 +116,7 @@ interface AppState {
 
   init: () => Promise<void>
   setView: (v: View) => void
+  setModelSetupTask: (task: ModelTask, returnView?: View | null) => void
   setPrimaryLanguage: (l: PrimaryLanguage) => void
   setActiveModel: (m: CatalogModel) => void
   /** Record that a model's weights are now cached (after a successful Download). */
@@ -103,7 +131,7 @@ interface AppState {
   undo: () => void
   redo: () => void
   refreshHistory: () => Promise<void>
-  recommended: () => CatalogModel | null
+  recommended: (task?: ModelTask) => CatalogModel | null
   /** Transcribe a dropped/chosen file as a nav-safe background job. */
   runFileJob: (file: File) => Promise<void>
   /** Re-transcribe the open record with the Active Model as a nav-safe background job. */
@@ -125,6 +153,9 @@ export const useApp = create<AppState>((set, get) => ({
   provisioned: [],
   primaryLanguage: 'en',
   activeModel: null,
+  activeTranslationModel: null,
+  modelSetupTask: 'transcription',
+  modelSetupReturnView: null,
   record: null,
   mediaUrl: null,
   history: [],
@@ -141,6 +172,7 @@ export const useApp = create<AppState>((set, get) => ({
     const catalog = buildCatalog()
     const savedLang = (await getSetting<PrimaryLanguage>('primaryLanguage').catch(() => undefined)) ?? 'en'
     const savedModelId = await getSetting<string>('activeModelId').catch(() => undefined)
+    const savedTranslationModelId = await getSetting<string>('activeTranslationModelId').catch(() => undefined)
 
     // Reconcile the provisioned-id hint against Cache Storage truth (ADR-0008).
     const idToHf = new Map(catalog.map((m) => [m.id, m.hfId]))
@@ -151,8 +183,13 @@ export const useApp = create<AppState>((set, get) => ({
     let activeModel: CatalogModel | null = savedModelId
       ? catalog.find((m) => m.id === savedModelId) ?? null
       : null
+    let activeTranslationModel: CatalogModel | null = savedTranslationModelId
+      ? catalog.find((m) => m.id === savedTranslationModelId) ?? null
+      : null
     if (activeModel && !provisioned.includes(activeModel.id)) activeModel = null
+    if (activeTranslationModel && !provisioned.includes(activeTranslationModel.id)) activeTranslationModel = null
 
+    const hashView = viewFromHash()
     set({
       capability,
       catalog,
@@ -160,17 +197,38 @@ export const useApp = create<AppState>((set, get) => ({
       provisioned,
       primaryLanguage: savedLang,
       activeModel,
+      activeTranslationModel,
       ready: true,
-      view: activeModel ? 'workspace' : 'landing',
+      view: hashView ?? (activeModel ? 'workspace' : activeTranslationModel ? 'translate' : 'landing'),
     })
   },
 
-  setView: (view) => set({ view }),
+  setView: (view) =>
+    {
+      writeViewHash(view)
+      set((s) => ({
+        view,
+        modelSetupReturnView: view === 'onboarding' ? s.modelSetupReturnView : null,
+        modelSetupTask:
+          view === 'translate'
+            ? 'translation'
+            : view === 'workspace' || view === 'transcript'
+              ? 'transcription'
+              : s.modelSetupTask,
+      }))
+    },
+  setModelSetupTask: (modelSetupTask, modelSetupReturnView = null) =>
+    set({ modelSetupTask, modelSetupReturnView }),
   setPrimaryLanguage: (l) => {
     void setSetting('primaryLanguage', l)
     set({ primaryLanguage: l })
   },
   setActiveModel: (m) => {
+    if (m.task === 'translation') {
+      void setSetting('activeTranslationModelId', m.id)
+      set({ activeTranslationModel: m })
+      return
+    }
     void setSetting('activeModelId', m.id)
     set({ activeModel: m })
   },
@@ -183,13 +241,16 @@ export const useApp = create<AppState>((set, get) => ({
   evict: async (m) => {
     await evictModel(m.hfId, m.id)
     const wasActive = get().activeModel?.id === m.id
-    if (wasActive) {
+    const wasActiveTranslation = get().activeTranslationModel?.id === m.id
+    if (wasActive || wasActiveTranslation) {
       await disposeEngine()
-      void setSetting('activeModelId', '')
+      if (wasActive) void setSetting('activeModelId', '')
+      if (wasActiveTranslation) void setSetting('activeTranslationModelId', '')
     }
     set((s) => ({
       provisioned: s.provisioned.filter((x) => x !== m.id),
       activeModel: wasActive ? null : s.activeModel,
+      activeTranslationModel: wasActiveTranslation ? null : s.activeTranslationModel,
     }))
   },
   setCapability: (capability) => set({ capability }),
@@ -236,14 +297,14 @@ export const useApp = create<AppState>((set, get) => ({
     void saveTranscript(updated).then(() => get().refreshHistory())
   },
   refreshHistory: async () => set({ history: await listTranscripts() }),
-  recommended: () => {
+  recommended: (task = 'transcription') => {
     const s = get()
-    return s.capability ? recommendModel(s.catalog, s.capability, s.primaryLanguage) : null
+    return s.capability ? recommendModel(s.catalog, s.capability, s.primaryLanguage, task) : null
   },
 
   runFileJob: async (file) => {
     const { activeModel, primaryLanguage, capability, job } = get()
-    if (!activeModel || job) return // single-job invariant: one shared engine at a time
+    if (!activeModel || activeModel.task !== 'transcription' || job) return // single-job invariant: one shared engine at a time
     const patch = (p: Partial<ActiveJob>) =>
       set((s) => (s.job ? { job: { ...s.job, ...p } } : {}))
     lastFile = file
@@ -335,7 +396,7 @@ export const useApp = create<AppState>((set, get) => ({
 
   runRerunJob: async () => {
     const { record, activeModel, primaryLanguage, capability, job } = get()
-    if (!record || !activeModel || job) return
+    if (!record || !activeModel || activeModel.task !== 'transcription' || job) return
     const patch = (p: Partial<ActiveJob>) =>
       set((s) => (s.job ? { job: { ...s.job, ...p } } : {}))
     const originId = record.id

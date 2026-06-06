@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Mic, Square, Loader2, AlertTriangle, Radio } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import { decodeToFloat32 } from '@/lib/ffmpeg'
-import { getEngine, transcribe, languageName } from '@/lib/engine'
+import { getAsrEngine, transcribe, languageName } from '@/lib/engine'
 import { buildAsrLayer, deriveEditLayer } from '@/lib/asr'
 import { saveMediaAsset, saveTranscript } from '@/lib/db'
 import { cn, formatTime, uid } from '@/lib/utils'
@@ -92,7 +92,7 @@ export function LiveMic() {
     try {
       const blob = new Blob(chunksRef.current, { type: mimeRef.current })
       const { wave } = await decodeToFloat32(new File([blob], 'live.webm', { type: mimeRef.current }))
-      const asr = await getEngine(activeModel, device)
+      const asr = await getAsrEngine(activeModel, device)
       const out = await transcribe(asr, wave, {
         language: language(),
         englishOnly: activeModel.englishOnly,
@@ -125,7 +125,7 @@ export function LiveMic() {
       const { wave, durationSec } = await decodeToFloat32(
         new File([blob], 'live.webm', { type: mimeRef.current }),
       )
-      const asr = await getEngine(activeModel, device)
+      const asr = await getAsrEngine(activeModel, device)
       const out = await transcribe(asr, wave, {
         language: language(),
         englishOnly: activeModel.englishOnly,

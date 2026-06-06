@@ -8,15 +8,24 @@ import { NoModelState } from '@/components/NoModelState'
 export function Workspace() {
   const activeModel = useApp((s) => s.activeModel)
   const setView = useApp((s) => s.setView)
+  const setModelSetupTask = useApp((s) => s.setModelSetupTask)
 
   if (!activeModel) {
-    return <NoModelState onSetup={() => setView('onboarding')} />
+    return (
+      <NoModelState
+        section="transcription"
+        onSetup={() => {
+          setModelSetupTask('transcription')
+          setView('onboarding')
+        }}
+      />
+    )
   }
 
   return (
     <div className="space-y-6 py-4">
       <div className="space-y-1">
-        <h2 className="text-2xl font-semibold tracking-tight">Workspace</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">Transcribe</h2>
         <p className="text-sm text-muted-foreground">
           Current model: <span className="text-foreground">{activeModel.label}</span>. Files are
           processed in this browser.

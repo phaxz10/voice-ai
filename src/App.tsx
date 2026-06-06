@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useApp } from '@/lib/store'
+import { useApp, viewFromHash } from '@/lib/store'
 import { TopBar } from '@/components/TopBar'
 import { Landing } from '@/screens/Landing'
 import { Onboarding } from '@/screens/Onboarding'
 import { Workspace } from '@/screens/Workspace'
+import { Translate } from '@/screens/Translate'
 import { TranscriptView } from '@/screens/TranscriptView'
 import { HistoryView } from '@/screens/HistoryView'
 
@@ -21,10 +22,20 @@ export default function App() {
   const ready = useApp((s) => s.ready)
   const view = useApp((s) => s.view)
   const init = useApp((s) => s.init)
+  const setView = useApp((s) => s.setView)
 
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = viewFromHash()
+      if (next) setView(next)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [setView])
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -39,6 +50,8 @@ export default function App() {
             <Onboarding />
           ) : view === 'workspace' ? (
             <Workspace />
+          ) : view === 'translate' ? (
+            <Translate />
           ) : view === 'transcript' ? (
             <TranscriptView />
           ) : view === 'history' ? (

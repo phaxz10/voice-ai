@@ -1,10 +1,6 @@
-import type {
-  CapabilityReport,
-  CatalogModel,
-  PrimaryLanguage
-} from './types'
+import type { CapabilityReport, CatalogModel, ModelTask, PrimaryLanguage } from './types'
 
-const FAMILY_ORDER: CatalogModel['family'][] = ['small', 'large-v3-turbo']
+const FAMILY_ORDER: CatalogModel['family'][] = ['small', 'large-v3-turbo', 'nllb']
 
 type Entry = Omit<CatalogModel, 'available'>
 
@@ -12,13 +8,27 @@ type Entry = Omit<CatalogModel, 'available'>
 // Deliberately scoped to Small (the smallest tier that doesn't hallucinate/loop on hard audio)
 // and Large v3 Turbo — the tiny/base tiers were dropped because they loop on real meetings.
 const ENTRIES: Entry[] = [
-  { id: 'small.en', label: 'Small (English)', family: 'small', hfId: 'Xenova/whisper-small.en', englishOnly: true, multilingual: false, sizeMb: 520, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 3 } },
-  { id: 'small', label: 'Small', family: 'small', hfId: 'Xenova/whisper-small', englishOnly: false, multilingual: true, sizeMb: 520, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 2, zh: 2, ja: 2, yue: 1, tl: 2 } },
+  { id: 'small.en', label: 'Small (English)', task: 'transcription', family: 'small', hfId: 'Xenova/whisper-small.en', englishOnly: true, multilingual: false, sizeMb: 520, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 3 } },
+  { id: 'small', label: 'Small', task: 'transcription', family: 'small', hfId: 'Xenova/whisper-small', englishOnly: false, multilingual: true, sizeMb: 520, ramCeilingMb: 1200, requiresWebGPU: false, languages: { en: 2, zh: 2, ja: 2, yue: 1, tl: 2 } },
   // We request word-level timestamps (return_timestamps: 'word'), which needs a decoder exported
   // WITH cross-attentions. The canonical `whisper-large-v3-turbo` export lacks them and throws
   // "Model outputs must contain cross attentions"; the `_timestamped` sibling is re-exported with
   // output_attentions=True (same q4/fp16 ONNX variants). Don't revert this id — it reintroduces the crash.
-  { id: 'large-v3-turbo', label: 'Large v3 Turbo', family: 'large-v3-turbo', hfId: 'onnx-community/whisper-large-v3-turbo_timestamped', englishOnly: false, multilingual: true, sizeMb: 1600, ramCeilingMb: 2400, requiresWebGPU: true, languages: { en: 3, zh: 3, ja: 3, yue: 2, tl: 2 } },
+  { id: 'large-v3-turbo', label: 'Large v3 Turbo', task: 'transcription', family: 'large-v3-turbo', hfId: 'onnx-community/whisper-large-v3-turbo_timestamped', englishOnly: false, multilingual: true, sizeMb: 1600, ramCeilingMb: 2400, requiresWebGPU: true, languages: { en: 3, zh: 3, ja: 3, yue: 2, tl: 2 } },
+  {
+    id: 'nllb-200-distilled-600m',
+    label: 'NLLB 200 Distilled',
+    task: 'translation',
+    family: 'nllb',
+    hfId: 'Xenova/nllb-200-distilled-600M',
+    englishOnly: false,
+    multilingual: true,
+    // q8 encoder + merged decoder are about 900 MB; leave headroom for tokenizer/config files.
+    sizeMb: 950,
+    ramCeilingMb: 1300,
+    requiresWebGPU: false,
+    languages: { en: 3, zh: 3, yue: 3, ja: 3, ko: 3, th: 3, ms: 3, tl: 3 },
+  },
 ]
 
 export function buildCatalog(): CatalogModel[] {
@@ -39,7 +49,8 @@ const TIER_MAX_RAM: Record<CapabilityReport['tier'], number> = {
 export function recommendModel(
   catalog: CatalogModel[],
   cap: CapabilityReport,
-  primary: PrimaryLanguage,
+  primary: PrimaryLanguage = 'en',
+  task: ModelTask = 'transcription',
 ): CatalogModel | null {
   const english = primary === 'en'
   const maxRam = TIER_MAX_RAM[cap.tier]
@@ -47,10 +58,12 @@ export function recommendModel(
   const usable = catalog.filter(
     (m) =>
       m.available &&
+      m.task === task &&
       m.ramCeilingMb <= maxRam &&
       (!m.requiresWebGPU || cap.webgpu) &&
-      (english ? m.englishOnly || m.multilingual : m.multilingual) &&
-      (primary === 'auto' || english || (m.languages[primary] ?? 0) >= 1),
+      (task === 'translation' ||
+        ((primary === 'auto' ? m.multilingual : english ? m.englishOnly || m.multilingual : m.multilingual) &&
+          (primary === 'auto' || english || (m.languages[primary] ?? 0) >= 1))),
   )
 
   const ranked = usable.sort((a, b) => {
@@ -61,5 +74,5 @@ export function recommendModel(
       : Number(b.multilingual) - Number(a.multilingual)
   })
 
-  return ranked[0] ?? catalog.find((m) => m.available) ?? null
+  return ranked[0] ?? catalog.find((m) => m.available && m.task === task) ?? null
 }

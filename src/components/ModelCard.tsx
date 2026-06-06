@@ -7,9 +7,13 @@ const LANG_LABELS: Record<string, string> = {
   zh: 'ZH',
   yue: 'YUE',
   ja: 'JA',
+  ko: 'KO',
+  th: 'TH',
+  ms: 'MS',
   tl: 'TL',
 }
-const LANG_ORDER = ['en', 'zh', 'yue', 'ja', 'tl']
+const TRANSCRIPTION_LANG_ORDER = ['en', 'zh', 'yue', 'ja', 'tl']
+const TRANSLATION_LANG_ORDER = ['en', 'yue', 'zh', 'ja', 'ko', 'th', 'ms', 'tl']
 
 function Dots({ q }: { q: number }) {
   return (
@@ -55,8 +59,14 @@ export function ModelCard({
         : selected
           ? 'Selected'
           : ''
-  const modelScope = model.multilingual ? 'Multilingual model' : 'English-only model'
+  const modelScope =
+    model.task === 'translation'
+      ? 'Text translation model'
+      : model.multilingual
+        ? 'Multilingual model'
+        : 'English-only model'
   const engineNote = model.requiresWebGPU ? 'Requires WebGPU' : 'Runs on WebGPU or CPU'
+  const langOrder = model.task === 'translation' ? TRANSLATION_LANG_ORDER : TRANSCRIPTION_LANG_ORDER
 
   return (
     <div
@@ -122,8 +132,13 @@ export function ModelCard({
         {modelScope}. {engineNote}.
       </div>
 
-      <div className="grid grid-cols-5 gap-1 border-t pt-2.5">
-        {LANG_ORDER.map((l) => (
+      <div
+        className={cn(
+          'grid gap-1 border-t pt-2.5',
+          model.task === 'translation' ? 'grid-cols-4 sm:grid-cols-8' : 'grid-cols-5',
+        )}
+      >
+        {langOrder.map((l) => (
           <div key={l} className="flex flex-col items-center gap-1">
             <span className="text-[10px] font-medium text-muted-foreground">{LANG_LABELS[l]}</span>
             <Dots q={model.languages[l] ?? 0} />

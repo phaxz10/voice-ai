@@ -1,26 +1,15 @@
-import { useMemo, useRef, useState } from 'react'
-import {
-  Download,
-  Loader2,
-  Cpu,
-  HardDrive,
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Zap,
-  X,
-  RotateCcw,
-  Check,
-  Info,
-} from 'lucide-react'
-import { useApp } from '@/lib/store'
-import { recommendModel } from '@/lib/catalog'
-import { fitCheck } from '@/lib/capability'
-import { getEngine, benchmark, isCancelled, type LoadStatus } from '@/lib/engine'
-import { type CatalogModel, PRIMARY_LANGUAGES, type PrimaryLanguage } from '@/lib/types'
+import { ModelCard } from '@/components/ModelCard'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
 import {
   Select,
   SelectContent,
@@ -28,16 +17,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
-import { ModelCard } from '@/components/ModelCard'
+import { fitCheck } from '@/lib/capability'
+import { recommendModel } from '@/lib/catalog'
+import { benchmark, getEngine, isCancelled, type ASR, type LoadStatus } from '@/lib/engine'
+import { useApp } from '@/lib/store'
+import { PRIMARY_LANGUAGES, type CatalogModel, type PrimaryLanguage } from '@/lib/types'
 import { formatMb } from '@/lib/utils'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Cpu,
+  Download,
+  HardDrive,
+  Info,
+  Loader2,
+  RotateCcw,
+  X,
+  Zap,
+} from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 
 type Phase = 'idle' | 'downloading' | 'calibrating' | 'error' | 'cancelled'
 
@@ -49,19 +49,29 @@ export function Onboarding() {
   const setActiveModel = useApp((s) => s.setActiveModel)
   const setCapability = useApp((s) => s.setCapability)
   const setView = useApp((s) => s.setView)
+  const modelSetupTask = useApp((s) => s.modelSetupTask)
+  const modelSetupReturnView = useApp((s) => s.modelSetupReturnView)
   const provisioned = useApp((s) => s.provisioned)
   const activeModel = useApp((s) => s.activeModel)
+  const activeTranslationModel = useApp((s) => s.activeTranslationModel)
   const markProvisioned = useApp((s) => s.markProvisioned)
   const evict = useApp((s) => s.evict)
 
-  const changing = !!activeModel
+  const taskActiveModel = modelSetupTask === 'translation' ? activeTranslationModel : activeModel
+  const changing = !!taskActiveModel
+  const visibleCatalog = useMemo(
+    () => catalog.filter((m) => m.task === modelSetupTask),
+    [catalog, modelSetupTask],
+  )
+  const taskLabel = modelSetupTask === 'translation' ? 'Translation' : 'Transcription'
+  const taskView = modelSetupReturnView ?? (modelSetupTask === 'translation' ? 'translate' : 'workspace')
 
   const recommended = useMemo(
-    () => (capability ? recommendModel(catalog, capability, primaryLanguage) : null),
-    [catalog, capability, primaryLanguage],
+    () => (capability ? recommendModel(catalog, capability, primaryLanguage, modelSetupTask) : null),
+    [catalog, capability, modelSetupTask, primaryLanguage],
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const selected = catalog.find((m) => m.id === selectedId) ?? activeModel ?? recommended
+  const selected = visibleCatalog.find((m) => m.id === selectedId) ?? taskActiveModel ?? recommended
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [status, setStatus] = useState<LoadStatus | null>(null)
@@ -71,7 +81,7 @@ export function Onboarding() {
 
   const busy = phase === 'downloading' || phase === 'calibrating'
 
-  const selectedActive = !!selected && activeModel?.id === selected.id
+  const selectedActive = !!selected && taskActiveModel?.id === selected.id
   const selectedProvisioned = !!selected && provisioned.includes(selected.id)
 
   const storageFree =
@@ -81,7 +91,7 @@ export function Onboarding() {
 
   function switchTo(m: CatalogModel) {
     setActiveModel(m)
-    setView('workspace')
+    setView(taskView)
   }
 
   async function provision() {
@@ -104,14 +114,16 @@ export function Onboarding() {
       })
       markProvisioned(selected.id)
       setActiveModel(selected)
-      setPhase('calibrating')
-      try {
-        const rtf = await benchmark(asr)
-        setCapability({ ...capability, benchmarkRtf: rtf })
-      } catch {
-        /* optional */
+      if (selected.task === 'transcription') {
+        setPhase('calibrating')
+        try {
+          const rtf = await benchmark(asr as ASR)
+          setCapability({ ...capability, benchmarkRtf: rtf })
+        } catch {
+          /* optional */
+        }
       }
-      setView('workspace')
+      setView(taskView)
     } catch (e) {
       if (isCancelled(e)) {
         setPhase('cancelled')
@@ -141,42 +153,46 @@ export function Onboarding() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <button
-            onClick={() => setView(changing ? 'workspace' : 'landing')}
+            onClick={() => setView(changing ? taskView : 'landing')}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft className="size-3.5" /> {changing ? 'workspace' : 'back'}
+            <ArrowLeft className="size-3.5" /> {changing ? (modelSetupTask === 'translation' ? 'translate' : 'workspace') : 'back'}
           </button>
           <h2 className="text-2xl font-semibold tracking-tight">
-            {changing ? 'Models' : 'Choose a model'}
+            {changing ? `${taskLabel} Models` : `Choose a ${taskLabel.toLowerCase()} model`}
           </h2>
           <p className="text-sm text-muted-foreground">
             {changing
-              ? 'Switch models, add another one, or clear cached model files. Transcripts stay on this device.'
-              : 'Pick a language, cache one model, and start transcribing. You can change this later.'}
+              ? 'Switch models, add another one, or clear cached model files. Local data stays on this device.'
+              : modelSetupTask === 'translation'
+                ? 'Cache one Translation Model and start translating text on this device.'
+                : 'Pick a language, cache one model, and start transcribing. You can change this later.'}
           </p>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="lang">Primary language</Label>
-          <Select
-            value={primaryLanguage}
-            disabled={busy}
-            onValueChange={(v) => {
-              setPrimaryLanguage(v as PrimaryLanguage)
-              setSelectedId(null)
-            }}
-          >
-            <SelectTrigger id="lang" className="w-52">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PRIMARY_LANGUAGES.map((l) => (
-                <SelectItem key={l.code} value={l.code}>
-                  {l.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {modelSetupTask === 'transcription' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="lang">Primary language</Label>
+            <Select
+              value={primaryLanguage}
+              disabled={busy}
+              onValueChange={(v) => {
+                setPrimaryLanguage(v as PrimaryLanguage)
+                setSelectedId(null)
+              }}
+            >
+              <SelectTrigger id="lang" className="w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRIMARY_LANGUAGES.map((l) => (
+                  <SelectItem key={l.code} value={l.code}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {capability && (
@@ -214,14 +230,14 @@ export function Onboarding() {
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {catalog.map((m) => (
+        {visibleCatalog.map((m) => (
           <ModelCard
             key={m.id}
             model={m}
             recommended={recommended?.id === m.id}
             selected={selected?.id === m.id}
             provisioned={provisioned.includes(m.id)}
-            active={activeModel?.id === m.id}
+            active={taskActiveModel?.id === m.id}
             busy={busy}
             onSelect={(mm) => setSelectedId(mm.id)}
             onEvict={busy ? undefined : (mm) => setEvictTarget(mm)}
@@ -324,9 +340,9 @@ export function Onboarding() {
                   variant="glow"
                   size="lg"
                   className="w-full sm:w-auto"
-                  onClick={() => setView('workspace')}
+                  onClick={() => setView(taskView)}
                 >
-                  Open workspace <ArrowRight className="size-4" />
+                  Open {modelSetupTask === 'translation' ? 'Translate' : 'workspace'} <ArrowRight className="size-4" />
                 </Button>
               ) : selectedProvisioned ? (
                 <Button
@@ -352,7 +368,7 @@ export function Onboarding() {
             <DialogTitle>Remove {evictTarget?.label} from this device?</DialogTitle>
             <DialogDescription>
               This frees its storage
-              {evictTarget && activeModel?.id === evictTarget.id
+              {evictTarget && taskActiveModel?.id === evictTarget.id
                 ? ' and unloads it as your active model'
                 : ''}
               . Your transcripts and settings are kept, and you can download it again anytime.

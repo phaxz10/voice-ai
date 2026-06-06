@@ -46,7 +46,26 @@ export interface ASRResult {
   chunks?: ASRChunk[]
 }
 
+export interface TranslationSingle {
+  translation_text: string
+  generated_text?: string
+}
+export type TranslationOutput = TranslationSingle[]
+export type Translator = Awaited<ReturnType<typeof pipeline>> & {
+  (text: string | string[], opts?: Record<string, unknown>): Promise<unknown>
+  dispose?: () => Promise<void>
+}
+export type EnginePipeline = ASR | Translator
+
 function dtypeFor(model: CatalogModel, device: EngineDevice): unknown {
+  if (model.task === 'translation') {
+    // NLLB's q8 export produces good text for both Mandarin and Cantonese. The q4f16 WebGPU
+    // export can decode to an empty string without throwing, so keep Translation on q8 and let
+    // the WebGPU loader fall back to WASM if that execution provider rejects the quantized graph.
+    const dtype = 'q8'
+    return { model: dtype, encoder_model: dtype, decoder_model_merged: dtype }
+  }
+
   const large = model.family === 'large-v3-turbo'
   if (device === 'webgpu') {
     // large-v3-turbo: fp16 encoder + 4-bit decoder. (The onnx-community fp16 *merged decoder* trips
@@ -67,7 +86,7 @@ function dtypeFor(model: CatalogModel, device: EngineDevice): unknown {
 
 interface Loaded {
   key: string
-  asr: ASR
+  engine: EnginePipeline
 }
 let current: Loaded | null = null
 /** Monotonic load id; bumping it abandons any in-flight load (used for cancel + supersede). */
@@ -181,13 +200,14 @@ function buildPipeline(
   model: CatalogModel,
   device: EngineDevice,
   report: (info: RawProgress) => void,
-): Promise<ASR> {
+): Promise<EnginePipeline> {
+  const task = model.task === 'translation' ? 'translation' : 'automatic-speech-recognition'
   const make = (dev: EngineDevice) =>
-    pipeline('automatic-speech-recognition', model.hfId, {
+    pipeline(task, model.hfId, {
       device: dev,
       dtype: dtypeFor(model, dev) as never,
       progress_callback: report as never,
-    }) as unknown as Promise<ASR>
+    }) as unknown as Promise<EnginePipeline>
   return make(device).catch((e) => {
     if (device === 'webgpu') return make('wasm') // graceful fallback
     throw e
@@ -209,9 +229,9 @@ export async function getEngine(
   model: CatalogModel,
   device: EngineDevice,
   opts: GetEngineOpts = {},
-): Promise<ASR> {
-  const key = `${model.hfId}|${device}`
-  if (current?.key === key) return current.asr
+): Promise<EnginePipeline> {
+  const key = `${model.task}|${model.hfId}|${device}`
+  if (current?.key === key) return current.engine
   if (current) await disposeEngine()
 
   const token = ++loadToken
@@ -219,19 +239,19 @@ export async function getEngine(
   const build = buildPipeline(model, device, report)
 
   // Background settle: commit if still the active load; otherwise dispose + Evict (clean slate).
-  const settle: Promise<ASR | null> = build.then(
-    async (asr) => {
+  const settle: Promise<EnginePipeline | null> = build.then(
+    async (engine) => {
       if (token !== loadToken) {
         try {
-          await asr.dispose?.()
+          await engine.dispose?.()
         } catch {
           /* ignore */
         }
         await evictModel(model.hfId).catch(() => {})
         return null
       }
-      current = { key, asr }
-      return asr
+      current = { key, engine }
+      return engine
     },
     async (e) => {
       if (token === loadToken) await evictModel(model.hfId).catch(() => {}) // purge partial
@@ -245,7 +265,7 @@ export async function getEngine(
     if (!asr) throw new CancelledError('Download cancelled')
     return asr
   }
-  return await new Promise<ASR>((resolve, reject) => {
+  return await new Promise<EnginePipeline>((resolve, reject) => {
     const onAbort = () => {
       loadToken++ // abandon the in-flight load; settle() disposes + Evicts when it finishes
       reject(new CancelledError('Download cancelled'))
@@ -253,9 +273,9 @@ export async function getEngine(
     if (signal.aborted) return onAbort()
     signal.addEventListener('abort', onAbort, { once: true })
     settle.then(
-      (asr) => {
+      (engine) => {
         signal.removeEventListener('abort', onAbort)
-        if (asr) resolve(asr)
+        if (engine) resolve(engine)
         else reject(new CancelledError('Download cancelled'))
       },
       (e) => {
@@ -264,6 +284,28 @@ export async function getEngine(
       },
     )
   })
+}
+
+export async function getAsrEngine(
+  model: CatalogModel,
+  device: EngineDevice,
+  opts: GetEngineOpts = {},
+): Promise<ASR> {
+  if (model.task !== 'transcription') {
+    throw new Error(`${model.label} is a Translation Model, not a Transcription Model.`)
+  }
+  return (await getEngine(model, device, opts)) as ASR
+}
+
+export async function getTranslationEngine(
+  model: CatalogModel,
+  device: EngineDevice,
+  opts: GetEngineOpts = {},
+): Promise<Translator> {
+  if (model.task !== 'translation') {
+    throw new Error(`${model.label} is a Transcription Model, not a Translation Model.`)
+  }
+  return (await getEngine(model, device, opts)) as Translator
 }
 
 function loadedKey(): string | null {
@@ -276,7 +318,7 @@ export async function disposeEngine(): Promise<void> {
   const c = current
   current = null
   try {
-    await c.asr.dispose?.()
+    await c.engine.dispose?.()
   } catch {
     /* ignore */
   }
@@ -330,11 +372,11 @@ function plannedChunks(wave: Float32Array): PlannedChunk[] {
   return chunks
 }
 
-function attachAbortDisposal(asr: ASR, signal?: AbortSignal): () => void {
+function attachAbortDisposal(engine: EnginePipeline, signal?: AbortSignal): () => void {
   if (!signal) return () => {}
   const onAbort = () => {
-    if (current?.asr === asr) current = null
-    void asr.dispose?.().catch(() => {})
+    if (current?.engine === engine) current = null
+    void engine.dispose?.().catch(() => {})
   }
   if (signal.aborted) onAbort()
   signal.addEventListener('abort', onAbort, { once: true })
@@ -539,7 +581,7 @@ export async function transcribeWithEngine(
   opts: TranscribeWithEngineOpts = {},
 ): Promise<ASRResult> {
   const loadOpts = { signal: opts.signal, onProgress: opts.onLoadProgress }
-  const asr = await getEngine(model, preferredDevice, loadOpts)
+  const asr = await getAsrEngine(model, preferredDevice, loadOpts)
   opts.onDeviceReady?.(preferredDevice)
   try {
     return await transcribe(asr, wave, opts)
@@ -553,12 +595,95 @@ export async function transcribeWithEngine(
     ) {
       await disposeEngine()
       opts.onFallback?.('wasm')
-      const fallback = await getEngine(model, 'wasm', loadOpts)
+      const fallback = await getAsrEngine(model, 'wasm', loadOpts)
       opts.onDeviceReady?.('wasm')
       return await transcribe(fallback, wave, opts)
     }
     throw e
   }
+}
+
+export interface TranslateWithEngineOpts {
+  signal?: AbortSignal
+  onLoadProgress?: LoadProgress
+  onDeviceReady?: (device: EngineDevice) => void
+  onFallback?: (device: EngineDevice) => void
+}
+
+export async function translateWithEngine(
+  model: CatalogModel,
+  preferredDevice: EngineDevice,
+  text: string,
+  pair: { srcLang: string; tgtLang: string },
+  opts: TranslateWithEngineOpts = {},
+): Promise<string> {
+  const loadOpts = { signal: opts.signal, onProgress: opts.onLoadProgress }
+  const translator = await getTranslationEngine(model, preferredDevice, loadOpts)
+  opts.onDeviceReady?.(preferredDevice)
+  const run = async (engine: Translator) => {
+    throwIfCancelled(opts.signal, 'Translation stopped')
+    const detachAbort = attachAbortDisposal(engine, opts.signal)
+    try {
+      const out = await engine(text, {
+        src_lang: pair.srcLang,
+        tgt_lang: pair.tgtLang,
+        max_new_tokens: 160,
+      })
+      throwIfCancelled(opts.signal, 'Translation stopped')
+      return extractTranslationText(out)
+    } finally {
+      detachAbort()
+    }
+  }
+
+  try {
+    const translated = await run(translator)
+    if (translated) return translated
+    if (preferredDevice === 'webgpu' && !opts.signal?.aborted) {
+      await disposeEngine()
+      opts.onFallback?.('wasm')
+      const fallback = await getTranslationEngine(model, 'wasm', loadOpts)
+      opts.onDeviceReady?.('wasm')
+      const retried = await run(fallback)
+      if (retried) return retried
+    }
+    throw new Error('The model returned an empty translation.')
+  } catch (e) {
+    if (isCancelled(e)) throw e
+    if (
+      preferredDevice === 'webgpu' &&
+      !model.requiresWebGPU &&
+      isWebGpuRuntimeError(e) &&
+      !opts.signal?.aborted
+    ) {
+      await disposeEngine()
+      opts.onFallback?.('wasm')
+      const fallback = await getTranslationEngine(model, 'wasm', loadOpts)
+      opts.onDeviceReady?.('wasm')
+      return await run(fallback)
+    }
+    throw e
+  }
+}
+
+function extractTranslationText(out: unknown): string {
+  const queue: unknown[] = Array.isArray(out) ? [...out] : [out]
+  while (queue.length > 0) {
+    const item = queue.shift()
+    if (typeof item === 'string' && item.trim()) return item.trim()
+    if (Array.isArray(item)) {
+      queue.push(...item)
+      continue
+    }
+    if (!item || typeof item !== 'object') continue
+    const record = item as Record<string, unknown>
+    for (const key of ['translation_text', 'generated_text', 'text']) {
+      const value = record[key]
+      if (typeof value === 'string' && value.trim()) return value.trim()
+      if (Array.isArray(value)) queue.push(value)
+    }
+  }
+  return ''
 }
 
 /** Quick ×realtime benchmark using the already-loaded pipeline. */
