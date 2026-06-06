@@ -8,18 +8,9 @@ import { NoModelState } from '@/components/NoModelState'
 export function Workspace() {
   const activeModel = useApp((s) => s.activeModel)
   const setView = useApp((s) => s.setView)
-  const setModelSetupTask = useApp((s) => s.setModelSetupTask)
 
   if (!activeModel) {
-    return (
-      <NoModelState
-        section="transcription"
-        onSetup={() => {
-          setModelSetupTask('transcription')
-          setView('onboarding')
-        }}
-      />
-    )
+    return <NoModelState onSetup={() => setView('onboarding')} />
   }
 
   return (

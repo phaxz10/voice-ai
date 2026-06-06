@@ -4,7 +4,6 @@ import {
   Cpu,
   CircleDot,
   ChevronsUpDown,
-  Languages,
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -14,19 +13,15 @@ import { cn } from '@/lib/utils'
 export function TopBar() {
   const view = useApp((s) => s.view)
   const setView = useApp((s) => s.setView)
-  const setModelSetupTask = useApp((s) => s.setModelSetupTask)
   const activeModel = useApp((s) => s.activeModel)
-  const activeTranslationModel = useApp((s) => s.activeTranslationModel)
   const capability = useApp((s) => s.capability)
   const isolated = capability?.crossOriginIsolated
-  const sectionModel = view === 'translate' ? activeTranslationModel : activeModel
-  const sectionTask = view === 'translate' ? 'translation' : 'transcription'
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/70 backdrop-blur-xl">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 md:px-6">
         <button
-          onClick={() => setView(activeModel ? 'workspace' : activeTranslationModel ? 'translate' : 'landing')}
+          onClick={() => setView(activeModel ? 'workspace' : 'landing')}
           className="flex items-center gap-2"
         >
           <span className="grid size-7 place-items-center rounded-md bg-foreground text-background dark:bg-primary dark:text-primary-foreground">
@@ -37,18 +32,15 @@ export function TopBar() {
 
         <div className="ml-auto flex items-center gap-1.5">
           <JobIndicator />
-          {sectionModel && (
+          {activeModel && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setModelSetupTask(sectionTask)
-                setView('onboarding')
-              }}
+              onClick={() => setView('onboarding')}
               title="Change model or manage downloads"
               className="hidden gap-1 md:inline-flex"
             >
-              <Cpu className="size-3" /> {sectionModel.label}
+              <Cpu className="size-3" /> {activeModel.label}
               <ChevronsUpDown className="size-3 opacity-60" />
             </Button>
           )}
@@ -58,13 +50,6 @@ export function TopBar() {
             onClick={() => setView('workspace')}
           >
             <Mic className="size-4" /> Transcribe
-          </Button>
-          <Button
-            variant={view === 'translate' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setView('translate')}
-          >
-            <Languages className="size-4" /> Translate
           </Button>
           <Button
             variant={view === 'history' ? 'secondary' : 'ghost'}

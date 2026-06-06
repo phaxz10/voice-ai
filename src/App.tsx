@@ -6,7 +6,6 @@ import { TopBar } from '@/components/TopBar'
 import { Landing } from '@/screens/Landing'
 import { Onboarding } from '@/screens/Onboarding'
 import { Workspace } from '@/screens/Workspace'
-import { Translate } from '@/screens/Translate'
 import { TranscriptView } from '@/screens/TranscriptView'
 import { HistoryView } from '@/screens/HistoryView'
 
@@ -50,8 +49,6 @@ export default function App() {
             <Onboarding />
           ) : view === 'workspace' ? (
             <Workspace />
-          ) : view === 'translate' ? (
-            <Translate />
           ) : view === 'transcript' ? (
             <TranscriptView />
           ) : view === 'history' ? (

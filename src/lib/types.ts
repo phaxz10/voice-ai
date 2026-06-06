@@ -77,14 +77,14 @@ export type TranscriptRecord = z.infer<typeof TranscriptRecord>
 /** Per-language quality: 0 = unsupported, 1 = limited, 2 = ok, 3 = strong. */
 export type LangQuality = 0 | 1 | 2 | 3
 
-export type ModelTask = 'transcription' | 'translation'
+export type ModelTask = 'transcription'
 
 export interface CatalogModel {
   /** Stable catalog id, e.g. "small.en". */
   id: string
   label: string
   task: ModelTask
-  family: 'small' | 'large-v3-turbo' | 'nllb'
+  family: 'small' | 'large-v3-turbo'
   /** HuggingFace repo id loaded by Transformers.js (ONNX weights). */
   hfId: string
   /** Whether this is the English-only (.en) build. */
@@ -135,60 +135,6 @@ export const PRIMARY_LANGUAGES = [
   { code: 'auto', label: 'Other / Mixed' },
 ] as const
 export type PrimaryLanguage = (typeof PRIMARY_LANGUAGES)[number]['code']
-
-/** Languages surfaced by the Translate Section. NLLB uses FLORES-200 codes. */
-export const TRANSLATE_LANGUAGES = [
-  {
-    code: 'en',
-    label: 'English',
-    nllb: 'eng_Latn',
-    speechLangs: ['en-US', 'en-GB', 'en'],
-  },
-  {
-    code: 'yue',
-    label: 'Cantonese',
-    nllb: 'yue_Hant',
-    speechLangs: ['zh-HK', 'yue-HK', 'zh-yue'],
-  },
-  {
-    code: 'zh',
-    label: 'Mandarin',
-    nllb: 'zho_Hans',
-    speechLangs: ['zh-CN', 'zh-Hans', 'zh'],
-  },
-  {
-    code: 'ja',
-    label: 'Japanese',
-    nllb: 'jpn_Jpan',
-    speechLangs: ['ja-JP', 'ja'],
-  },
-  {
-    code: 'ko',
-    label: 'Korean',
-    nllb: 'kor_Hang',
-    speechLangs: ['ko-KR', 'ko'],
-  },
-  {
-    code: 'th',
-    label: 'Thai',
-    nllb: 'tha_Thai',
-    speechLangs: ['th-TH', 'th'],
-  },
-  {
-    code: 'ms',
-    label: 'Malay',
-    nllb: 'zsm_Latn',
-    speechLangs: ['ms-MY', 'ms'],
-  },
-  {
-    code: 'tl',
-    label: 'Tagalog',
-    nllb: 'tgl_Latn',
-    speechLangs: ['fil-PH', 'tl-PH', 'fil', 'tl'],
-  },
-] as const
-export type TranslateLanguageCode = (typeof TRANSLATE_LANGUAGES)[number]['code']
-export type TranslateLanguage = (typeof TRANSLATE_LANGUAGES)[number]
 
 export type ExportFormat = 'txt' | 'srt' | 'vtt' | 'json' | 'md'
 export type ExportLayer = 'raw' | 'corrected'

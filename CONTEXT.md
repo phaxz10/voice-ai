@@ -1,24 +1,21 @@
-# VOICE AI
+# Voice AI
 
-*(working name — "VOICE AI" is a placeholder; see **Brand**)* A local-first, in-browser **voice toolkit**. Everything runs on the user's own device; no audio, text, or file ever leaves the client. Free, installable (PWA), works offline once a Model is present. The product has two **Sections** that share one engine, Catalog, capability check, and privacy guarantee:
-
-- **Transcribe** — audio/video → a timestamped, editable Transcript (the original app).
-- **Translate** — type a phrase → get it back as text **and spoken aloud** in another language, for back-and-forth conversation (e.g. travel). No microphone: text in, text + voice out.
+*(working name — "VOICE AI" is a placeholder; see **Brand**)* A local-first voice toolkit split by delivery target. **Web Transcribe** is this browser app: audio, video, or microphone input becomes a timestamped, editable Transcript. **Native Translate** is the separate mobile app for spoken travel conversation, with typed text as a fallback.
 
 **Brand** *(open)*: "VOICE AI" is deliberately generic — but so generic it is hard to make ownable or searchable. Treat as a placeholder pending a naming pass before launch.
 
 ## Language
 
 **Section**:
-One of the two top-level tools — **Transcribe** or **Translate** — each on its own path. Sections share the engine, Catalog, Provisioning/Evict, and capability machinery but are distinct flows with distinct Models.
+One top-level product tool. In this repo the only shipped Section is **Web Transcribe**; **Native Translate** is a separate mobile app and should not be folded back into the web app.
 _Avoid_: tab, page, mode (those name UI mechanics, not the tool).
 
 **Model**:
-An ONNX checkpoint loaded by HuggingFace repo id, powering exactly one **Task**. Either a **Transcription Model** (a Whisper ASR checkpoint, e.g. `Xenova/whisper-small`) or a **Translation Model** (a text machine-translation checkpoint, e.g. `Xenova/nllb-200-distilled-600M`). Must be present locally (Provisioned) before its Task can run.
+An on-device checkpoint powering exactly one **Task**. In Web Transcribe, Models are only **Transcription Models**; Native Translate may also use **Translation Models** and future **Voice Models**.
 _Avoid_: weights, AI, the network.
 
 **Task**:
-What a Model does — **Transcription** (speech → text) or **Translation** (text → text). A Model serves one Task; Catalog, Provisioning, Evict, and capability machinery are shared across both.
+What a Model is responsible for — **Transcription** (speech → text), **Translation** (text → text), or voice synthesis. Web Transcribe's only Catalog Task is Transcription.
 _Avoid_: type, mode, pipeline (that names the engine internal, not the role).
 
 **Provision** (a Model):
@@ -26,11 +23,11 @@ To make a Model available in the browser's cache so it can be used offline. Happ
 _Avoid_: load, install (those name the mechanics, not the act).
 
 **Download** (a Model):
-Provisioning by picking a Model from the Catalog; the engine fetches its ONNX weights from HuggingFace and caches them on first use.
+Provisioning by picking a Model from the Catalog; the app fetches its checkpoint files and caches them on first use.
 _Avoid_: using "sideload" for this — reserve that for a user-supplied HF id.
 
 **Sideload** (a Model):
-Provisioning by supplying any HuggingFace repo id that ships ONNX weights (e.g. a language-specialized fine-tune) via the "load custom model" field.
+Provisioning by supplying a user-chosen model id or local model package that matches a supported runtime.
 _Avoid_: upload (nothing goes to a server); "BYO file" (it's an id, not a file).
 
 **Evict** (a Model):
@@ -46,7 +43,7 @@ The Model the app suggests as the best default *for the current device and Prima
 _Avoid_: default model.
 
 **Active Model**:
-The single provisioned Model currently selected to run transcription. The user changes it from the Catalog; switching is immediate when the target is already provisioned.
+The provisioned Model currently selected for a Task. Web Transcribe has one active Transcription Model; Native Translate may have separate active Transcription, Translation, and Voice Models.
 _Avoid_: current model, selected model (those name UI state, not the role); default model (that's the Recommended Model).
 
 **Language Profile**:
@@ -56,6 +53,14 @@ _Avoid_: language list, locale support.
 **Primary Language**:
 The language the user declares at onboarding, used to steer the Recommended Model (e.g. English → an `.en` Model).
 _Avoid_: locale, default language.
+
+**Travel Language Pair**:
+A bidirectional language pair Native Translate is expected to handle well for short travel conversations. English ↔ Cantonese is the first priority, followed by Mandarin, Japanese, Korean, Thai, Malay, and Tagalog.
+_Avoid_: benchmark language, supported locale.
+
+**Active Travel Language**:
+The selected non-English language for a Native Translate conversation. It determines both directions: **Me** translates English into this language, while **Them** translates this language back into English.
+_Avoid_: target language (only true for Me), source language (only true for Them), locale.
 
 **Capability Tier**:
 A coarse classification of the current device's transcription ability (e.g. Low / Medium / High), derived from cheap signals plus the benchmark, used to pick the Recommended Model and shape warnings.
@@ -70,7 +75,7 @@ The hard pre-Download test that a Model's memory + storage footprint fits the de
 _Avoid_: capability check (that's the soft, ETA-based assessment).
 
 **Engine**:
-The warm Transformers.js ASR pipeline with the active Model loaded on the chosen device (WebGPU or WASM), kept alive across both transcription modes.
+The warm on-device inference session for an Active Model. Web Transcribe keeps an ASR Engine; Native Translate may keep separate resident Engines for Transcription, Translation, and voice synthesis.
 _Avoid_: worker, runner, backend (there is no server backend).
 
 **Transcript**:
@@ -85,14 +90,54 @@ _Avoid_: task, upload.
 A microphone → Transcript run that streams interim results in near real-time — the live mode.
 _Avoid_: recording, stream.
 
-**Translate** (the Section) / **Translation** (its result):
-Typing a phrase in one language and getting it back as on-screen text **and** synthesized speech in another, to hold a back-and-forth conversation. Powered by a Translation Model (text → text) plus a **Built-in Voice** for the spoken output. Conversational and meaning-first (not literal); distinct from a Transcript.
-_Not_: Whisper's `translate` task (`AsrLayer.task`), which only goes *foreign speech → English text* and lives in the **Transcribe** Section. The **Translate** Section is text-first and bidirectional.
+**Native Translate**:
+The separate mobile-only spoken conversation app where a person speaks or types a phrase in one language and gets it back as on-screen text **and** synthesized speech in another. Conversational and meaning-first (not literal); distinct from Web Transcribe and from a Transcript.
+_Avoid_: Translate Section inside the web app.
+
+**Translation**:
+The text result of Native Translate turning a source phrase into a target-language phrase.
+_Not_: Whisper's `translate` task (`AsrLayer.task`), which only goes *foreign speech → English text* inside Transcription.
 _Avoid_: interpret, localize.
 
+**Translation Provider**:
+The selected engine for the Translation task in Native Translate. It can be a local Translation Model or a frontier cloud model, while ASR and voice output stay local.
+_Avoid_: model provider (too broad), backend.
+
+**Active Translation Provider**:
+The conversation-level Translation Provider currently selected for Native Translate. Every Me/Them Spoken Turn and typed fallback uses it until the user changes it.
+_Avoid_: per-turn provider, active model (too local-model-specific).
+
+**Frontier Cloud Integration**:
+An optional Native Translate capability that can call user-configured frontier cloud models as the Translation Provider. It receives text plus direction context and returns translated text; it does not handle transcription or voice output.
+_Avoid_: backend, online mode, cloud-first.
+
+**Spoken Turn**:
+A single Native Translate exchange where a spoken phrase is heard, translated, shown as text, and spoken aloud in the other language. A typed exchange skips the hearing step but produces the same Translation.
+_Avoid_: voice mode, recording, query.
+
+**Current Turn**:
+The most recent Native Translate exchange shown as the primary screen content. It keeps the app focused on the active conversation moment rather than a transcript-like feed.
+_Avoid_: latest result, active message.
+
+**Conversation Log**:
+The hidden-by-default list of prior Spoken Turns that can be reopened when the user needs to revisit the conversation. It persists locally on the device and is not the primary Native Translate screen.
+_Avoid_: History (reserved for Web Transcribe's transcript list), transcript, chat log.
+
+**Speaker Side**:
+The side of a Native Translate conversation that determines translation direction. **Me** means English speech or text translated into the Active Travel Language; **Them** means the Active Travel Language translated back into English.
+_Avoid_: source/target toggle, language swap.
+
+**Hold-to-Talk**:
+The Native Translate input gesture where speech is captured only while the user is holding the talk button. This is distinct from a start/stop recorder and from automatic voice activity detection.
+_Avoid_: push-to-talk (ambiguous), recording mode, VAD.
+
 **Built-in Voice**:
-A text-to-speech voice supplied by the user's own device/OS via the browser Web Speech API, used to speak a Translation aloud. The app never bundles or downloads voices and prefers offline (`localService`) voices so nothing leaves the device. Availability is per-device — notably Cantonese needs a `zh-HK` pack the user installs in OS settings.
+A text-to-speech voice supplied by the user's own device/OS, used to speak a Translation aloud. The app prefers offline voices so nothing leaves the device. Availability is per-device — notably Cantonese needs a `zh-HK` pack the user installs in OS settings.
 _Avoid_: TTS Model, synth (a Built-in Voice is explicitly *not* a Provisioned Model).
+
+**Voice Model**:
+A Provisioned Model that synthesizes spoken output locally when Built-in Voices are not natural enough. It is a Native Translate upgrade path, not part of Web Transcribe.
+_Avoid_: ElevenLabs (that names a cloud product, not this local capability), Built-in Voice.
 
 **Voice Check**:
 The runtime probe of which Built-in Voices the device exposes for the wanted languages — used to confirm spoken output will work and to prompt installing a missing language pack. The speech-side analogue of the Fit-check.

@@ -1,21 +1,16 @@
-import { ArrowRight, History as HistoryIcon, Languages, Mic } from 'lucide-react'
+import { ArrowRight, History as HistoryIcon, Mic } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { NoModelState } from '@/components/NoModelState'
 
 export function Landing() {
   const activeModel = useApp((s) => s.activeModel)
-  const activeTranslationModel = useApp((s) => s.activeTranslationModel)
   const setView = useApp((s) => s.setView)
-  const setModelSetupTask = useApp((s) => s.setModelSetupTask)
 
-  if (!activeModel && !activeTranslationModel) {
+  if (!activeModel) {
     return (
       <NoModelState
-        onSetup={() => {
-          setModelSetupTask('transcription')
-          setView('onboarding')
-        }}
+        onSetup={() => setView('onboarding')}
       />
     )
   }
@@ -25,7 +20,7 @@ export function Landing() {
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold tracking-tight">VOICE AI</h2>
         <p className="text-sm text-muted-foreground">
-          Local-first transcription and phrase translation in this browser.
+          Local-first transcription in this browser.
         </p>
       </div>
 
@@ -34,11 +29,6 @@ export function Landing() {
           <Button variant="glow" onClick={() => setView('workspace')}>
             <Mic className="size-4" />
             Transcribe
-            <ArrowRight className="size-4" />
-          </Button>
-          <Button variant="outline" onClick={() => setView('translate')}>
-            <Languages className="size-4" />
-            Translate
             <ArrowRight className="size-4" />
           </Button>
           <Button variant="outline" onClick={() => setView('history')}>

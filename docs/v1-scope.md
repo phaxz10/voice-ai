@@ -42,7 +42,7 @@ Local-first, in-browser speech-to-text. All transcription runs on the user's dev
 
 ## Catalog spec
 
-`tiny(.en)` · `base(.en)` · `small(.en)` · `large-v3-turbo` (ONNX, loaded by HF id; WebGPU-gated for turbo) — plus **Sideload-by-id** for any ONNX HF model. Quantization is per-device (`fp16`/`q4` on WebGPU, `q8` on WASM). Each entry: `{ id, hfId, label, sizeMb, ramCeilingMb, requiresWebGPU, multilingual, languages: {en,zh,ja,yue,tl,…quality} }`. Recommended = best that passes Fit-check ∧ WebGPU-gate ∧ Primary Language.
+`small.en` · multilingual `small` · `large-v3-turbo` (ONNX, loaded by HF id; WebGPU-gated for turbo). Tiny/base tiers were dropped after real meeting audio exposed repetition loops. Quantization is per-device (`fp16`/`q4` on WebGPU, `q8` on WASM). Each entry: `{ id, hfId, label, sizeMb, ramCeilingMb, requiresWebGPU, multilingual, languages: {en,zh,ja,yue,tl,…quality} }`. Recommended = best that passes Fit-check ∧ WebGPU-gate ∧ Primary Language.
 
 ## Acceptance criteria
 

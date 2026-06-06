@@ -1,9 +1,9 @@
-# Curated Models — Transcribe + Translate
+# Model Research Notes — Web Transcribe + Native Translate
 
-A grounded shortlist of HuggingFace models for both Sections, filtered for **on-device use on a mid-range phone (Samsung S23 class)** and **meaning-first (not literal) translation**. Everything here runs in the browser via Transformers.js (ONNX, WebGPU → WASM fallback), the same engine the app already uses.
+As of [ADR-0012](./adr/0012-split-web-transcription-native-translation.md), the web app Catalog is **transcription-only**. The ASR notes below describe Web Transcribe candidates; the Translation and voice notes are retained as Native Translate research candidates, not browser Catalog entries.
 
 > The hard constraint is a three-way squeeze:
-> **"runs on the S23 browser"** (small/quantized only) ✕ **"Cantonese + Hokkien"** (the good models are big) ✕ **"conveys tone, not word-for-word"** (favours larger neural models / LLMs). The picks below are where those three overlap; the honest gaps are called out explicitly.
+> **"runs resident on the S23 Ultra"** (small/quantized, measured memory) ✕ **"Cantonese + Hokkien"** (the good models are big) ✕ **"conveys tone, not word-for-word"** (favours larger neural models / LLMs). The picks below are where those three overlap; the honest gaps are called out explicitly.
 
 ---
 
@@ -20,11 +20,11 @@ Already supported by the engine; these are Catalog drop-ins.
 | Cantonese, lower latency | `alvanlii/distil-whisper-small-cantonese` | ~330 MB | WASM ok | Distilled = faster on the S23 |
 | Cantonese, max quality | `khleeloo/whisper-large-v3-cantonese` · `simonl0909/whisper-large-v2-cantonese` | ~1.5 GB | **WebGPU only** | Desktop tier |
 
-Note: base multilingual Whisper can already do **Cantonese speech → English text** today (its `translate` task). But Whisper's translate **only ever targets English** — it can never produce English → Cantonese. That asymmetry is the whole reason Translate needs its own Section with a real MT Model, not a Whisper flag.
+Note: base multilingual Whisper can already do **Cantonese speech → English text** today (its `translate` task). But Whisper's translate **only ever targets English** — it can never produce English → Cantonese. That asymmetry is the whole reason Native Translate needs a real MT Model, not a Whisper flag.
 
 ---
 
-## 2. Translate (text → text) — on-device MT Models
+## 2. Native Translate (text → text) — on-device MT Models
 
 **Tier A — ship on the S23 now:**
 
@@ -36,29 +36,29 @@ Note: base multilingual Whisper can already do **Cantonese speech → English te
 
 **NLLB FLORES-200 codes** (for whoever wires it): English `eng_Latn` · Cantonese `yue_Hant` · Mandarin `zho_Hans`/`zho_Hant` · Japanese `jpn_Jpan` · Korean `kor_Hang` · Thai `tha_Thai` · Malay `zsm_Latn`.
 
-**Recommended default:** `nllb-200-distilled-600M` for coverage + reliability; offer `Qwen2.5-0.5B-Instruct` as a "more natural / tone-aware (experimental)" alternative — the same Recommended-Model + alternatives pattern the Catalog already uses.
+**Recommended default to test:** `nllb-200-distilled-600M` for coverage + reliability; offer `Qwen2.5-0.5B-Instruct` as a "more natural / tone-aware (experimental)" alternative if it fits the Native Translate resident-memory budget.
 
 ---
 
 ## 3. Speech output — Built-in Voices, not a Model
 
-Decision: spoken output uses the **phone's own voices** via the Web Speech API (`speechSynthesis`), filtered to offline `localService` voices. Nothing is bundled or downloaded. Reasons, grounded in research:
+Baseline: spoken output uses the **phone's own installed voices** through native OS APIs when they are local/offline. Nothing is bundled or downloaded for the first pass. Reasons, grounded in research:
 
 - **MMS-TTS** (Meta, ~1,100 languages) — **has no Cantonese (`yue`) voice.** It even ships Min Nan (`mms-tts-nan`) and Korean (`mms-tts-kor`), but Cantonese is a known gap.
 - **Kokoro-82M** (best small browser TTS) — **English-only** today; multilingual still in progress.
-- **Web Speech API** — the **only** path that can speak Cantonese on the S23, *if* a `zh-HK` voice is installed. Availability is per-device; some voices are cloud-backed (filter to `localService` to stay private/offline).
+- **Android / Samsung installed voices** — the most likely path that can speak Cantonese on the S23 Ultra, *if* a `zh-HK` voice is installed. Availability is per-device; cloud-backed voices must not be used for the offline product promise.
 
-A **Voice Check** (enumerate `speechSynthesis.getVoices()`) confirms what the device can speak and nudges the user to install a missing pack — the speech-side analogue of the capability/Fit-check.
+A **Voice Check** confirms what the device can speak and nudges the user to install a missing pack — the speech-side analogue of the capability/Fit-check.
 
 ---
 
-## 4. Off-device tier — best quality, but NOT on the S23 browser
+## 4. Larger candidates — best quality, but not first target
 
 | HF id | Why it's great | Why it's out |
 |---|---|---|
-| `facebook/seamless-m4t-v2-large` | Direct speech↔speech, best Cantonese, and the **only** credible **Hokkien** path (grew out of Meta's Hokkien speech-translation work) | ~2.3 B; the ONNX port (`fabio-sim/Fast-SeamlessM4T-ONNX`) targets server ONNXRuntime, not mobile browsers |
+| `facebook/seamless-m4t-v2-large` | Direct speech↔speech, best Cantonese, and the **only** credible **Hokkien** path (grew out of Meta's Hokkien speech-translation work) | ~2.3 B; must prove it can stay resident and responsive on the S23 Ultra native stack |
 
-Reserved for an eventual tiny backend or a native app.
+Reserved until the native app proves the resident ASR + MT baseline.
 
 ---
 
@@ -83,5 +83,5 @@ Reserved for an eventual tiny backend or a native app.
 - [Transformers.js docs](https://huggingface.co/docs/transformers.js/index) · [Transformers.js v4 / WebGPU](https://github.com/huggingface/transformers.js/)
 - MT: [`Xenova/nllb-200-distilled-600M`](https://huggingface.co/Xenova/nllb-200-distilled-600M) · [NLLB-200 (Meta)](https://ai.meta.com/research/no-language-left-behind/) · [`onnx-community/Qwen2.5-1.5B`](https://huggingface.co/onnx-community/Qwen2.5-1.5B) · Opus-MT (Helsinki-NLP)
 - Cantonese ASR: [`alvanlii/whisper-small-cantonese`](https://huggingface.co/alvanlii/whisper-small-cantonese) · [`alvanlii/distil-whisper-small-cantonese`](https://huggingface.co/alvanlii/distil-whisper-small-cantonese) · [`khleeloo/whisper-large-v3-cantonese`](https://huggingface.co/khleeloo/whisper-large-v3-cantonese)
-- TTS: [`facebook/mms-tts`](https://huggingface.co/facebook/mms-tts) (no `yue`) · [Kokoro TTS (Xenova)](https://huggingface.co/posts/Xenova/503648859052804) · [Web Speech API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)
+- TTS: [`facebook/mms-tts`](https://huggingface.co/facebook/mms-tts) (no `yue`) · [Kokoro TTS (Xenova)](https://huggingface.co/posts/Xenova/503648859052804)
 - Off-device: [`facebook/seamless-m4t-v2-large`](https://huggingface.co/facebook/seamless-m4t-v2-large) · [Fast-SeamlessM4T-ONNX](https://github.com/fabio-sim/Fast-SeamlessM4T-ONNX)

@@ -3,10 +3,12 @@
 Vibe coded AI slop I use personally for:
 
 Transcription - for meeting recordings, taking notes, etc.
-Translation - When I go somewhere unfamiliar
+
+Spoken translation is now split into a separate native mobile app; this web
+project intentionally stays transcription-only (ADR-0012).
 
 Private, on-device speech-to-text. Drop in audio/video → get a timestamped, editable
-transcript powered by **Whisper running entirely in your browser** (whisper.cpp → WASM).
+transcript powered by **Whisper running entirely in your browser** (Transformers.js / ONNX).
 No uploads, no servers, no accounts. Your audio and transcripts never leave the tab.
 
 ## Run
@@ -56,7 +58,7 @@ Design docs: [`CONTEXT.md`](./CONTEXT.md) (glossary) · [`docs/adr/`](./docs/adr
 ## Engine notes / current limits
 
 - Engine: **Transformers.js (ONNX)** on **WebGPU** where available, WASM fallback (ADR-0007).
-- Catalog spans `tiny → small` (±`.en`) plus **`large-v3-turbo`** (WebGPU-gated). **Advanced → "load any HuggingFace model"** accepts any HF id shipping ONNX weights (language fine-tunes, distil, etc.).
+- Catalog currently offers `small.en`, multilingual `small`, and **`large-v3-turbo`** (WebGPU-gated). Tiny/base tiers were dropped because they loop on real meeting audio.
 - Per-token **confidence isn't exposed** by this engine, so the low-confidence highlight is inert.
 - The Transcript view **isolates the playback highlight** (memoized segments + a change-only active-word store) so long transcripts stay at full framerate; list windowing is deferred behind a length threshold (ADR-0009). **react-scan** is wired as a dev-only profiler and stripped from the prod bundle.
 - Downloads **can't resume** — the Cache API has no range support, so cancelling Evicts the partial and a retry restarts (ADR-0008).

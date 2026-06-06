@@ -1,6 +1,6 @@
-import type { CapabilityReport, CatalogModel, ModelTask, PrimaryLanguage } from './types'
+import type { CapabilityReport, CatalogModel, PrimaryLanguage } from './types'
 
-const FAMILY_ORDER: CatalogModel['family'][] = ['small', 'large-v3-turbo', 'nllb']
+const FAMILY_ORDER: CatalogModel['family'][] = ['small', 'large-v3-turbo']
 
 type Entry = Omit<CatalogModel, 'available'>
 
@@ -15,20 +15,6 @@ const ENTRIES: Entry[] = [
   // "Model outputs must contain cross attentions"; the `_timestamped` sibling is re-exported with
   // output_attentions=True (same q4/fp16 ONNX variants). Don't revert this id — it reintroduces the crash.
   { id: 'large-v3-turbo', label: 'Large v3 Turbo', task: 'transcription', family: 'large-v3-turbo', hfId: 'onnx-community/whisper-large-v3-turbo_timestamped', englishOnly: false, multilingual: true, sizeMb: 1600, ramCeilingMb: 2400, requiresWebGPU: true, languages: { en: 3, zh: 3, ja: 3, yue: 2, tl: 2 } },
-  {
-    id: 'nllb-200-distilled-600m',
-    label: 'NLLB 200 Distilled',
-    task: 'translation',
-    family: 'nllb',
-    hfId: 'Xenova/nllb-200-distilled-600M',
-    englishOnly: false,
-    multilingual: true,
-    // q8 encoder + merged decoder are about 900 MB; leave headroom for tokenizer/config files.
-    sizeMb: 950,
-    ramCeilingMb: 1300,
-    requiresWebGPU: false,
-    languages: { en: 3, zh: 3, yue: 3, ja: 3, ko: 3, th: 3, ms: 3, tl: 3 },
-  },
 ]
 
 export function buildCatalog(): CatalogModel[] {
@@ -50,7 +36,6 @@ export function recommendModel(
   catalog: CatalogModel[],
   cap: CapabilityReport,
   primary: PrimaryLanguage = 'en',
-  task: ModelTask = 'transcription',
 ): CatalogModel | null {
   const english = primary === 'en'
   const maxRam = TIER_MAX_RAM[cap.tier]
@@ -58,12 +43,11 @@ export function recommendModel(
   const usable = catalog.filter(
     (m) =>
       m.available &&
-      m.task === task &&
+      m.task === 'transcription' &&
       m.ramCeilingMb <= maxRam &&
       (!m.requiresWebGPU || cap.webgpu) &&
-      (task === 'translation' ||
-        ((primary === 'auto' ? m.multilingual : english ? m.englishOnly || m.multilingual : m.multilingual) &&
-          (primary === 'auto' || english || (m.languages[primary] ?? 0) >= 1))),
+      (primary === 'auto' ? m.multilingual : english ? m.englishOnly || m.multilingual : m.multilingual) &&
+      (primary === 'auto' || english || (m.languages[primary] ?? 0) >= 1),
   )
 
   const ranked = usable.sort((a, b) => {
@@ -74,5 +58,5 @@ export function recommendModel(
       : Number(b.multilingual) - Number(a.multilingual)
   })
 
-  return ranked[0] ?? catalog.find((m) => m.available && m.task === task) ?? null
+  return ranked[0] ?? catalog.find((m) => m.available && m.task === 'transcription') ?? null
 }

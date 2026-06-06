@@ -1,4 +1,4 @@
-import { ArrowRight, Download, FileAudio, Languages, Mic2, WifiOff } from 'lucide-react'
+import { ArrowRight, Download, FileAudio, Mic2, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 function Point({
@@ -23,21 +23,15 @@ function Point({
 
 export function NoModelState({
   onSetup,
-  section = 'transcription',
 }: {
   onSetup: () => void
-  section?: 'transcription' | 'translation'
 }) {
-  const translation = section === 'translation'
-
   return (
     <div className="space-y-6 py-4">
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold tracking-tight">VOICE AI</h2>
         <p className="text-sm text-muted-foreground">
-          {translation
-            ? 'Offline-first phrase translation with built-in device voices.'
-            : 'Offline-first transcription for audio, video, and mic recordings.'}
+          Offline-first transcription for audio, video, and mic recordings.
         </p>
       </div>
 
@@ -52,26 +46,18 @@ export function NoModelState({
             <Point
               icon={Download}
               title="Load a model"
-              body={
-                translation
-                  ? 'Choose a Translation Model before starting.'
-                  : 'Choose the model size and language before starting.'
-              }
+              body="Choose the model size and language before starting."
             />
             <Point
-              icon={translation ? Languages : FileAudio}
-              title={translation ? 'Translate' : 'Transcribe'}
-              body={
-                translation
-                  ? 'Type a phrase, translate it, and speak it aloud.'
-                  : 'Upload a file or record from the mic, then edit and export.'
-              }
+              icon={FileAudio}
+              title="Transcribe"
+              body="Upload a file or record from the mic, then edit and export."
             />
           </div>
 
           <div className="border-t pt-5">
             <Button variant="glow" onClick={onSetup}>
-              Load {translation ? 'Translation' : 'Transcription'} Model
+              Load Transcription Model
               <ArrowRight className="size-4" />
             </Button>
           </div>
@@ -85,7 +71,7 @@ export function NoModelState({
                   <Mic2 className="size-4" />
                 </span>
                 <span className="truncate font-medium">
-                  {translation ? 'Translate' : 'Transcript workspace'}
+                  Transcript workspace
                 </span>
               </div>
               <span className="font-mono text-xs text-muted-foreground">00:00</span>
@@ -93,7 +79,7 @@ export function NoModelState({
 
             <div className="space-y-5 p-4">
               <div className="flex h-20 items-center gap-1 rounded-md border bg-background px-4">
-                {(translation ? [35, 35, 35, 35, 58, 58, 58, 58] : [18, 30, 42, 26, 54, 68, 34, 46, 22, 58, 72, 38, 30, 48, 64, 28, 20]).map(
+                {[18, 30, 42, 26, 54, 68, 34, 46, 22, 58, 72, 38, 30, 48, 64, 28, 20].map(
                   (h, i) => (
                     <span
                       key={i}

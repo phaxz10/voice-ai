@@ -31,7 +31,6 @@ export function HistoryView() {
   const history = useApp((s) => s.history)
   const activeModel = useApp((s) => s.activeModel)
   const setView = useApp((s) => s.setView)
-  const setModelSetupTask = useApp((s) => s.setModelSetupTask)
   const refreshHistory = useApp((s) => s.refreshHistory)
   const openTranscript = useApp((s) => s.openTranscript)
 
@@ -94,7 +93,6 @@ export function HistoryView() {
             <Button
               variant="glow"
               onClick={() => {
-                if (!activeModel) setModelSetupTask('transcription')
                 setView(activeModel ? 'workspace' : 'onboarding')
               }}
             >
