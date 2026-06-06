@@ -1,4 +1,9 @@
-# Local Transcribe
+# Voice AI
+
+Vibe coded AI slop I use personally for:
+
+Transcription - for meeting recordings, taking notes, etc.
+Translation - When I go somewhere unfamiliar
 
 Private, on-device speech-to-text. Drop in audio/video → get a timestamped, editable
 transcript powered by **Whisper running entirely in your browser** (whisper.cpp → WASM).
