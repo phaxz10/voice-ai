@@ -27,7 +27,7 @@ export function TopBar() {
           <span className="grid size-7 place-items-center rounded-md bg-foreground text-background dark:bg-primary dark:text-primary-foreground">
             <Mic className="size-4" />
           </span>
-          <span className="font-semibold tracking-tight">VOICE AI</span>
+          <span className="font-semibold tracking-tight">LocalTranscribeAI</span>
         </button>
 
         <div className="ml-auto flex items-center gap-1.5">
