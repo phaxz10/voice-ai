@@ -29,7 +29,9 @@ export function TopBar() {
           <span className="grid size-7 place-items-center rounded-md bg-foreground text-background dark:bg-primary dark:text-primary-foreground">
             <Mic className="size-4" />
           </span>
-          <span className="font-semibold tracking-tight">LocalTranscribeAI</span>
+          <span className="hidden font-semibold tracking-tight sm:inline">
+            LocalTranscribeAI
+          </span>
         </button>
 
         <div className="ml-auto flex items-center gap-1.5">
@@ -50,20 +52,24 @@ export function TopBar() {
             variant={view === 'workspace' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setView('workspace')}
+            title="Transcribe"
           >
-            <Mic className="size-4" /> Transcribe
+            <Mic className="size-4" />
+            <span className="hidden sm:inline">Transcribe</span>
           </Button>
           <Button
             variant={view === 'history' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setView('history')}
+            title="History"
           >
-            <HistoryIcon className="size-4" /> History
+            <HistoryIcon className="size-4" />
+            <span className="hidden sm:inline">History</span>
           </Button>
           <Button variant="ghost" size="sm" asChild title="Support this project">
             <a href={BUYMEACOFFEE_URL} target="_blank" rel="noopener noreferrer">
               <Coffee className="size-4" />
-              <span className="hidden md:inline">Support</span>
+              <span className="hidden sm:inline">Support</span>
             </a>
           </Button>
           <span
