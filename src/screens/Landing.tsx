@@ -9,6 +9,7 @@ import { useApp } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { NoModelState } from '@/components/NoModelState'
 import { FeaturePoint, WorkspacePreview } from '@/components/WorkspacePreview'
+import { SupportCard } from '@/components/Support'
 
 export function Landing() {
   const activeModel = useApp((s) => s.activeModel)
@@ -64,6 +65,10 @@ export function Landing() {
         <div className="border-t bg-background p-4 md:border-l md:border-t-0 md:p-6">
           <WorkspacePreview />
         </div>
+      </div>
+
+      <div className="max-w-5xl">
+        <SupportCard />
       </div>
     </div>
   )

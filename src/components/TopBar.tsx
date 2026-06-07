@@ -4,10 +4,12 @@ import {
   Cpu,
   CircleDot,
   ChevronsUpDown,
+  Coffee,
 } from 'lucide-react'
 import { useApp } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { JobIndicator } from '@/components/JobIndicator'
+import { BUYMEACOFFEE_URL } from '@/components/Support'
 import { cn } from '@/lib/utils'
 
 export function TopBar() {
@@ -57,6 +59,12 @@ export function TopBar() {
             onClick={() => setView('history')}
           >
             <HistoryIcon className="size-4" /> History
+          </Button>
+          <Button variant="ghost" size="sm" asChild title="Support this project">
+            <a href={BUYMEACOFFEE_URL} target="_blank" rel="noopener noreferrer">
+              <Coffee className="size-4" />
+              <span className="hidden md:inline">Support</span>
+            </a>
           </Button>
           <span
             title={
